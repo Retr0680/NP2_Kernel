@@ -1,8 +1,8 @@
 # Nothing Phone 2 Kernel Builder
 
-Builds a custom kernel for **Nothing Phone 2 (Pong)** with [Wild_KSU](https://github.com/WildKernels/Wild_KSU) and [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) via GitHub Actions.
+Builds a custom kernel for **Nothing Phone 2 (Pong)** with [KSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) and optional [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) via GitHub Actions.
 
-Uses [kernel_nothing_sm8475_cleaned](https://github.com/MiguVT/kernel_nothing_sm8475_cleaned) as the default kernel source.
+Based on the [LineageOS android_kernel_nothing_sm8475](https://github.com/LineageOS/android_kernel_nothing_sm8475.git) kernel source (android13-5.10-waipio, sublevel 246).
 
 ## Quick Start
 
@@ -15,14 +15,14 @@ Uses [kernel_nothing_sm8475_cleaned](https://github.com/MiguVT/kernel_nothing_sm
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `kernel_repo` | `MiguVT/kernel_nothing_sm8475_cleaned` | Kernel source repo URL |
-| `kernel_branch` | `clean` | Branch to build |
-| `kernel_defconfig` | `vendor/meteoric_defconfig` | Defconfig path |
-| `enable_susfs` | `true` | Enable SUSFS root hiding |
+| `kernel_repo` | `LineageOS/android_kernel_nothing_sm8475` | Kernel source repo URL |
+| `kernel_branch` | `lineage-23.2` | Branch to build |
+| `kernel_defconfig` | `gki_defconfig` | Defconfig path (relative to `arch/arm64/configs/`) |
+| `extra_configs` | `vendor/waipio_GKI.config vendor/nothing/waipio_GKI.config` | Extra config fragments to merge |
 
 The workflow builds two variants automatically via matrix:
-- **WKSU-SUSFS** — Wild_KSU + SUSFS
-- **WKSU** — Wild_KSU only
+- **KSU-Next-SUSFS** — KSU-Next + SUSFS
+- **KSU-Next** — KSU-Next only
 
 ## Flashing
 
@@ -36,13 +36,14 @@ fastboot flash boot boot.img
 fastboot reboot
 ```
 
-After flashing, install the [KernelSU Manager](https://github.com/tiann/KernelSU/releases) app.
+After flashing, install the [KernelSU Manager](https://github.com/KernelSU-Next/KernelSU-Next/releases) app.
 
 ## Credits
 
-- [WildKernels](https://github.com/WildKernels/Wild_KSU) — Wild_KSU
+- [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) — KSU-Next
 - [simonpunk](https://gitlab.com/simonpunk/susfs4ksu) — SUSFS
 - [osm0sis](https://github.com/osm0sis/AnyKernel3) — AnyKernel3
+- [LineageOS](https://github.com/LineageOS) — Kernel source
 
 ## Disclaimer
 

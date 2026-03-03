@@ -95,7 +95,11 @@ jobs:
       - name: Setup KSU-Next
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev_susfs
+          if [ "${{ matrix.susfs }}" = "true" ]; then
+            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev_susfs
+          else
+            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          fi
 
       - name: Apply SUSFS patches
         if: matrix.susfs
@@ -108,6 +112,10 @@ jobs:
 
           # Apply kernel patch
           patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch
+
+          # Ensure susfs.o compiles unconditionally (safety net for GKI builds)
+          sed -i 's/obj-$(CONFIG_KSU_SUSFS) += susfs.o/obj-y += susfs.o/' fs/Makefile
+          grep -q 'susfs\.o' fs/Makefile || echo 'obj-y += susfs.o' >> fs/Makefile
 
       - name: Configure kernel
         run: |
@@ -195,8 +203,13 @@ jobs:
           cp kernel/out/arch/arm64/boot/Image AnyKernel3/
           cp kernel/out/arch/arm64/boot/Image.gz AnyKernel3/ 2>/dev/null || true
 
-          # Copy anykernel.sh from repo
+          # Copy anykernel.sh from repo and set variant kernel string
           cp Scripts/anykernel.sh AnyKernel3/anykernel.sh
+          if [ "${{ matrix.susfs }}" = "true" ]; then
+            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - KSU-Next + SUSFS/' AnyKernel3/anykernel.sh
+          else
+            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - KSU-Next/' AnyKernel3/anykernel.sh
+          fi
 
           # Create zip
           cd AnyKernel3
