@@ -1,6 +1,6 @@
 # Nothing Phone 2 Kernel Builder
 
-Builds a custom kernel for **Nothing Phone 2 (Pong)** with [KSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) and optional [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) via GitHub Actions.
+Builds a custom kernel for **Nothing Phone 2 (Pong)** with [KWKSU](https://github.com/WildKernels/Wild_KSU/) and optional [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) via GitHub Actions.
 
 Based on the [LineageOS android_kernel_nothing_sm8475](https://github.com/LineageOS/android_kernel_nothing_sm8475.git) kernel source (android13-5.10-waipio, sublevel 246).
 
@@ -21,25 +21,19 @@ Based on the [LineageOS android_kernel_nothing_sm8475](https://github.com/Lineag
 | `extra_configs` | `vendor/waipio_GKI.config vendor/nothing/waipio_GKI.config` | Extra config fragments to merge |
 
 The workflow builds two variants automatically via matrix:
-- **KSU-Next-SUSFS** — KSU-Next + SUSFS
-- **KSU-Next** — KSU-Next only
+- **WKSU-SUSFS** — WKSU + SUSFS
+- **WKSU** — WKSU only
 
 ## Flashing
 
-### AnyKernel3 (recommended)
+### AnyKernel3
 Boot into recovery → flash the zip → reboot.
 
-### Fastboot
-```bash
-adb reboot bootloader
-fastboot flash boot boot.img
-fastboot reboot
-```
-
-After flashing, install the [KernelSU Manager](https://github.com/KernelSU-Next/KernelSU-Next/releases) app.
+After flashing, install the [KernelSU Manager](https://github.com/KernelSU-Next/KernelSU-Next/releases) app or the [Wild KSU](https://github.com/WildKernels/Wild_KSU) app to manage root access and modules.
 
 ## Credits
 
+- [WildKernels](https://github.com/WildKernels/Wild_KSU) - WKSU
 - [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) — KSU-Next
 - [simonpunk](https://gitlab.com/simonpunk/susfs4ksu) — SUSFS
 - [osm0sis](https://github.com/osm0sis/AnyKernel3) — AnyKernel3

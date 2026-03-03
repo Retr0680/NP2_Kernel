@@ -59,9 +59,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: KSU-Next-SUSFS
+          - variant: WKSU-SUSFS
             susfs: true
-          - variant: KSU-Next
+          - variant: WKSU
             susfs: false
 
     steps:
@@ -92,14 +92,10 @@ jobs:
               https://gitlab.com/simonpunk/susfs4ksu.git
           fi
 
-      - name: Setup KSU-Next
+      - name: Setup WKSU
         run: |
           cd kernel
-          if [ "${{ matrix.susfs }}" = "true" ]; then
-            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev_susfs
-          else
-            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          fi
+          curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s stable
 
       - name: Apply SUSFS patches
         if: matrix.susfs
@@ -206,9 +202,9 @@ jobs:
           # Copy anykernel.sh from repo and set variant kernel string
           cp Scripts/anykernel.sh AnyKernel3/anykernel.sh
           if [ "${{ matrix.susfs }}" = "true" ]; then
-            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - KSU-Next + SUSFS/' AnyKernel3/anykernel.sh
+            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - WKSU + SUSFS/' AnyKernel3/anykernel.sh
           else
-            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - KSU-Next/' AnyKernel3/anykernel.sh
+            sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - WKSU/' AnyKernel3/anykernel.sh
           fi
 
           # Create zip
