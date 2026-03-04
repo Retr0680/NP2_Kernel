@@ -198,6 +198,14 @@ jobs:
           # Remove -dirty suffix
           [ -f scripts/setlocalversion ] && sed -i 's/-dirty//g' scripts/setlocalversion || true
 
+      - name: Upload .config for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-NP2-${{ matrix.variant }}
+          path: kernel/out/.config
+          retention-days: 1
+
       - name: Enable swap space
         run: |
           # Remove existing swap file first
