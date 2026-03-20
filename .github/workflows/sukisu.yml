@@ -5,10 +5,10 @@ permissions:
     actions: write
 
 on:
-    worflow_dispatch:
+    workflow_dispatch:
         inputs:
             kernel_repo:
-                description: 'Kernel source repo'
+                description: 'Kernel Source repo'
                 required: false
                 type: string
                 default: https://github.com/ShaptakNaskar/android_kernel_nothing_sm8475.git
@@ -16,9 +16,29 @@ on:
                 description: 'Kernel branch'
                 required: false
                 type: string
-                default: 'SukiSU'
+                default: SukiSU
             kernel_defconfig:
                 description: 'Defconfig (relative to arch/arm64/configs/)'
+                required: false
+                type: string
+                default: 'gki_defconfig'
+            extra_configs:
+                description: 'Extra config fragments to merge (space-separated, relative to arch/arm64/configs/)'
+                required: false
+                type: string
+                default: 'vendor/waipio_GKI.config vendor/nothing/waipio_GKI.config vendor/debugfs.config'
+
+    workflow_call:
+        inputs:
+            kernel_repo:
+                required: false
+                type: string
+                default: 'https://github.com/ShaptakNaskar/android_kernel_nothing_sm8475.git'
+            kernel_branch:
+                required: false
+                type: string
+                default: 'SukiSU'
+            kernel_defconfig:
                 required: false
                 type: string
                 default: 'gki_defconfig'
@@ -28,31 +48,62 @@ on:
                 default: 'vendor/waipio_GKI.config vendor/nothing/waipio_GKI.config vendor/debugfs.config'
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
+    group: ${{  github.workflow }}-${{  github.ref  }}
     cancel-in-progress: true
 
 jobs:
     build:
         runs-on: ubuntu-latest
         timeout-minutes: 120
+        env:
+            MAKE_ARGS: >-
+                ARCH=arm64
+                CROSS_COMPILE=aarch64-linux-gnu-
+                CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+                LLVM=1 LLVM_IAS=1
+                LD=ld.lld HOSTLD=ld.lld
+                CC=clang cxx=clang++
+                HOSTCC=clang HOSTCXX=clang++
+                O=out
         strategy:
             fail-fast: false
             matrix:
                 include:
-                  - variant: SukiSU
+                    - variant: SukiSU
                     susfs: true
 
         steps:
-            - name:  Checkout repo
+            - name: Checkout repo
               uses: actions/checkout@v4
-
-            - name: Install depen
-                run: |
-                  sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends \
+            
+            - name: Install dependencies
+              run: |
+                sudo apt-get update
+                sudo apt-get install -y --no-install-recommends \
                     build-essential bc bison flex libelf-dev libssl-dev \
-                    lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu
+                    lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu \
+                    gcc-arm-linux-gnueabi
+            
             - name: Clone sources
               run: |
                 # Kernel
-                git clone --depth=1 -b
+                git clone --depth=1 -b "${{ inputs.kernel_branch || 'SukiSU' }}" \
+                  "${{ inputs.kernel_repo || 'https://github.com/ShaptakNaskar/android_kernel_nothing_sm8475.git' }}" \
+                  kernel
+
+                # SUSFS (only for SUSFS variant)
+                if [ "${{ matrix.susfs }}" = "true" ]; then
+                  git clone --depth=1 -b gki-android13-5.10 \
+                      https://gitlab.com/simonpunk/susfs4ksu.git
+                fi
+
+            - name: Setup SukiSU
+              run: |
+                cd kernel
+                curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/blob/main/kernel/setup.sh" | bash -s canary
+
+            - name: Apply SUSFS patches
+              if: matrix.susfs
+              run: |
+                cd kernel
+                
