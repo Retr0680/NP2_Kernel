@@ -55,6 +55,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      MAKE_ARGS: >-
+        ARCH=arm64
+        CROSS_COMPILE=aarch64-linux-gnu-
+        CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+        LLVM=1 LLVM_IAS=1
+        LD=ld.lld HOSTLD=ld.lld
+        CC=clang CXX=clang++
+        HOSTCC=clang HOSTCXX=clang++
+        O=out
     strategy:
       fail-fast: false
       matrix:
@@ -73,7 +83,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libelf-dev libssl-dev \
-            lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu
+            lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi
 
       - name: Clone sources
         run: |
@@ -95,7 +106,7 @@ jobs:
       - name: Setup WKSU
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh"
+          curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/wild/kernel/setup.sh" | bash -s canary
 
       - name: Apply SUSFS patches
         if: matrix.susfs
@@ -116,14 +127,6 @@ jobs:
           grep -q 'susfs\.o' fs/Makefile || echo 'obj-y += susfs.o' >> fs/Makefile
 
       - name: Configure kernel
-        env:
-          MAKE_ARGS: >-
-            ARCH=arm64
-            CROSS_COMPILE=aarch64-linux-gnu-
-            LLVM=1 LLVM_IAS=1
-            LD=ld.lld HOSTLD=ld.lld
-            CC=clang CXX=clang++
-            O=out
         run: |
           cd kernel
           DEFCONFIG="./arch/arm64/configs/${{ inputs.kernel_defconfig || 'gki_defconfig' }}"
@@ -138,6 +141,23 @@ jobs:
                 cat "$FRAG_PATH" >> "$DEFCONFIG"
               fi
             done
+          fi
+
+          # Seed KSU/SUSFS options into defconfig (scripts/config below is the real authority)
+          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+          if [ "${{ matrix.susfs }}" = "true" ]; then
+            echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
+          else
+            echo "CONFIG_KSU_SUSFS=n" >> "$DEFCONFIG"
           fi
 
           # Generate initial .config from defconfig
@@ -161,6 +181,9 @@ jobs:
             $KCFG -d KSU_SUSFS
           fi
 
+          # Resolve dependencies without dropping our forced configs
+          make $MAKE_ARGS olddefconfig
+
           # Verify critical configs survived
           echo "--- Config verification ---"
           grep -E 'CONFIG_KSU=|CONFIG_KSU_SUSFS=' out/.config || true
@@ -177,14 +200,6 @@ jobs:
 
           # Remove -dirty suffix
           [ -f scripts/setlocalversion ] && sed -i 's/-dirty//g' scripts/setlocalversion || true
-
-      - name: Upload .config for debugging
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: config-NP2-${{ matrix.variant }}
-          path: kernel/out/.config
-          retention-days: 1
 
       - name: Enable swap space
         run: |
@@ -203,14 +218,7 @@ jobs:
           JOBS=$(( $(nproc) / 2 ))
           [ "$JOBS" -lt 1 ] && JOBS=1
 
-          make -j$JOBS \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            LLVM=1 LLVM_IAS=1 \
-            LD=ld.lld HOSTLD=ld.lld \
-            CC=clang CXX=clang++ \
-            KCFLAGS="-Wno-error" \
-            O=out
+          make -j$JOBS $MAKE_ARGS KCFLAGS="-Wno-error"
 
       - name: Package AnyKernel3
         run: |
@@ -235,7 +243,7 @@ jobs:
           # Create zip
           cd AnyKernel3
           ZIP_NAME="${{ matrix.variant }}-NP2-Pong.zip"
-          zip -r "../$ZIP_NAME" ./*
+          zip -r9 "../$ZIP_NAME" ./*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -243,6 +251,14 @@ jobs:
           name: kernel-NP2-${{ matrix.variant }}
           path: "*.zip"
           retention-days: 30
+
+      - name: Upload .config for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-NP2-${{ matrix.variant }}
+          path: kernel/out/.config
+          retention-days: 1
 
       - name: Collect .rej files
         if: always()
