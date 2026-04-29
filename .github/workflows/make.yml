@@ -60,6 +60,9 @@ jobs:
         LD=ld.lld HOSTLD=ld.lld
         CC=clang CXX=clang++
         HOSTCC=clang HOSTCXX=clang++
+        LLVM_AR=llvm-ar
+        LLVM_NM=llvm-nm
+        LLVM_OBJDUMP=llvm-objdump
         O=out
       LLVM_AR: /usr/bin/llvm-ar
       LLVM_OBJDUMP: /usr/bin/llvm-objdump
@@ -93,7 +96,12 @@ jobs:
           git clone --depth=1 -b gki-android12-5.10 \
             https://gitlab.com/simonpunk/susfs4ksu.git
 
-      - name: Setup ReSukiSU
+      - name: Fix hardcoded LLVM paths
+        run: |
+          cd kernel
+          grep -rl "/home/arter97" . | xargs sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/||g'
+
+      - name: Setup SukiSU
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/sukisu-ultra/sukisu-ultra/main/kernel/setup.sh" | bash
