@@ -93,8 +93,8 @@ jobs:
           rm -rf AnyKernel3/.git
 
           # SUSFS
-          git clone --depth=1 -b gki-android12-5.10 \
-            https://gitlab.com/simonpunk/susfs4ksu.git
+          git clone --depth=1 -b gki-android13-5.10 \
+          https://gitlab.com/simonpunk/susfs4ksu.git
 
       - name: Fix hardcoded LLVM paths
         run: |
@@ -118,7 +118,7 @@ jobs:
           cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
 
           # Apply kernel patch with fail-safe
-          patch -p1 --force < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch || true
+          patch -p1 --force < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch || true
 
           # Safety net: force susfs.o into the build regardless of Kconfig resolution.
           # The Configure step uses scripts/config to guarantee CONFIG_KSU_SUSFS=y,
@@ -127,10 +127,10 @@ jobs:
           # grep -q 'susfs\.o' fs/Makefile || echo 'obj-y += susfs.o' >> fs/Makefile
 
       # In case I need the below for other kernel I keep it but not needed rn :b
-      # - name: Add ReSukiSU patches
+      # - name: Add SukiSU patches
       #   run: |
       #     cd kernel
-      #     # Apply ReSukiSU patches
+      #     # Apply SukiSU patches
       #     find ../patches -type f -name '*.diff' | while read -r patch; do
       #       echo "Applying $patch"
       #       patch -p1 < "$patch"
@@ -153,7 +153,7 @@ jobs:
             done
           fi
 
-          # Add ReSukiSU configs
+          # Add SukiSU configs
           echo "CONFIG_KSU=y" >> "$DEFCONFIG"
           echo "CONFIG_KPM=y" >> "$DEFCONFIG"
           echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
@@ -205,7 +205,7 @@ jobs:
 
           # Copy anykernel.sh from repo and set variant kernel string
           cp Scripts/anykernel.sh AnyKernel3/anykernel.sh
-          sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - ReSukiSU/' AnyKernel3/anykernel.sh
+          sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - SukiSU/' AnyKernel3/anykernel.sh
 
           # Create zip
           cd AnyKernel3
