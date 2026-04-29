@@ -114,11 +114,11 @@ jobs:
           patch -p1 < ../patches/avc_patch.diff
 
           # Copy SUSFS source files
-          cp ../susfs4ksu/kernel_patches/fs/* ./fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
+          #cp ../susfs4ksu/kernel_patches/fs/* ./fs/
+          #cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
 
           # Apply kernel patch with fail-safe
-          patch -p1 --force < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch || true
+          patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch
 
           # Safety net: force susfs.o into the build regardless of Kconfig resolution.
           # The Configure step uses scripts/config to guarantee CONFIG_KSU_SUSFS=y,
