@@ -1,4 +1,4 @@
-name: Build NP2 Kernel
+name: Build NP2 Kernel (arter97)
 
 permissions:
   contents: write
@@ -96,7 +96,7 @@ jobs:
       - name: Setup ReSukiSU
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/sukisu-ultra/sukisu-ultra/main/kernel/setup.sh" | bash
 
       - name: Apply SUSFS patches
         run: |
@@ -201,13 +201,13 @@ jobs:
 
           # Create zip
           cd AnyKernel3
-          ZIP_NAME="ReSukiSU-NP2-Pong.zip"
+          ZIP_NAME="SukiSU-NP2-Pong.zip"
           zip -r9 "../$ZIP_NAME" ./*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-NP2-ReSukiSU
+          name: kernel-NP2-SukiSU
           path: "*.zip"
           retention-days: 30
 
@@ -215,7 +215,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: config-NP2-ReSukiSU
+          name: config-NP2-SukiSU
           path: kernel/out/.config
           retention-days: 1
 
@@ -238,5 +238,5 @@ jobs:
         if: always() && steps.collect_rej.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: rej-NP2-ReSukiSU
+          name: rej-NP2-SukiSU
           path: rej/
