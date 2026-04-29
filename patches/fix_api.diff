@@ -1,23 +1,23 @@
 diff --git a/mm/vmalloc.c b/mm/vmalloc.c
 --- a/mm/vmalloc.c
 +++ b/mm/vmalloc.c
-@@
--	ptent = huge_ptep_get_and_clear(&init_mm, addr, pte, size);
-+	ptent = huge_ptep_get_and_clear(&init_mm, addr, pte);
+@@ -333,7 +333,7 @@
+-        ptent = huge_ptep_get_and_clear(&init_mm, addr, pte, size);
++        ptent = huge_ptep_get_and_clear(&init_mm, addr, pte);
 
-@@
+@@ -636,7 +636,6 @@
 -EXPORT_SYMBOL_GPL(map_kernel_range);
 
 diff --git a/fs/btrfs/free-space-cache.c b/fs/btrfs/free-space-cache.c
 --- a/fs/btrfs/free-space-cache.c
 +++ b/fs/btrfs/free-space-cache.c
-@@
--	bitmap_for_each_set_region(bitmap_info->bitmap, rs, re, 0,
--				   BITS_PER_BITMAP) {
--		break;
--	}
-+	rs = 0;
-+	re = 0;
-+	while (bitmap_next_set_region(bitmap_info->bitmap, &rs, &re, BITS_PER_BITMAP)) {
-+		break;
-+	}
+@@ -1929,10 +1929,14 @@
+-        bitmap_for_each_set_region(bitmap_info->bitmap, rs, re, 0,
+-                                   BITS_PER_BITMAP) {
+-                break;
+-        }
++        rs = 0;
++        re = 0;
++        while (bitmap_next_set_region(bitmap_info->bitmap, &rs, &re, BITS_PER_BITMAP)) {
++                break;
++        }
