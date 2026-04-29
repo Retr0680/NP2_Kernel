@@ -117,7 +117,7 @@ jobs:
           patch -p1 -N < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch || true
 
           # fix api
-          patch -p1 -N < ../patches/fix_api.diff || true
+          patch -p1 < ../patches/fix_api.diff
 
       # In case I need the below for other kernel I keep it but not needed rn :b
       # - name: Add SukiSU patches
