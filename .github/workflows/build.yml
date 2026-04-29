@@ -110,21 +110,22 @@ jobs:
         run: |
           cd kernel
 
-          # Fix issues with avc selinux
+          # Fix avc
           patch -p1 < ../patches/avc_patch.diff
 
-          # Copy SUSFS source files
-          #cp ../susfs4ksu/kernel_patches/fs/* ./fs/
-          #cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
-
-          # Apply kernel patch with fail-safe
+          # Apply SUSFS
           patch -p1 -N < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch || true
 
-          # Safety net: force susfs.o into the build regardless of Kconfig resolution.
-          # The Configure step uses scripts/config to guarantee CONFIG_KSU_SUSFS=y,
-          # but obj-y avoids a silent empty-object link failure if it gets dropped.
-          # sed -i 's/obj-$(CONFIG_KSU_SUSFS) += susfs.o/obj-y += susfs.o/' fs/Makefile
-          # grep -q 'susfs\.o' fs/Makefile || echo 'obj-y += susfs.o' >> fs/Makefile
+          # === FIX API MISMATCHES ===
+
+          # Fix vmalloc (remove size arg)
+          sed -i 's/huge_ptep_get_and_clear(&init_mm, addr, pte, size)/huge_ptep_get_and_clear(&init_mm, addr, pte)/g' mm/vmalloc.c
+
+          # Remove invalid export
+          sed -i '/EXPORT_SYMBOL_GPL(map_kernel_range)/d' mm/vmalloc.c
+
+          # Fix bitmap function
+          sed -i 's/bitmap_for_each_set_region/bitmap_next_set_region/g' fs/btrfs/free-space-cache.c
 
       # In case I need the below for other kernel I keep it but not needed rn :b
       # - name: Add SukiSU patches
