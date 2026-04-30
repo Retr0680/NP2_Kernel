@@ -145,13 +145,10 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      - name: Build kernel
+      - name: Build kernel (debug mode)
         run: |
           cd kernel
-          JOBS=$(( $(nproc) / 2 ))
-          [ "$JOBS" -lt 1 ] && JOBS=1
-
-          make -j$JOBS $MAKE_ARGS KCFLAGS="-Wno-error" V=1
+          make -j1 $MAKE_ARGS KCFLAGS="-Wno-error" V=1
 
       - name: Package AnyKernel3
         run: |
