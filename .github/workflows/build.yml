@@ -72,10 +72,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-          build-essential bc bison flex libelf-dev libssl-dev \
-          lz4 zip python3 clang llvm lld \
-          gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+            build-essential bc bison flex libelf-dev libssl-dev \
+            lz4 zip python3 clang llvm lld \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Clone sources
         run: |
@@ -110,6 +111,13 @@ jobs:
 
           echo "Applying fix_api patch..."
           patch -p1 < ../patches/fix_api.diff || echo "fix_api patch failed"
+
+          echo "Checking vmalloc state..."
+          grep -n "huge_ptep_get_and_clear" mm/vmalloc.c || true
+
+          echo "Forcing vmalloc fix (fallback)..."
+          sed -i 's/huge_ptep_get_and_clear(&init_mm, addr, pte, size)/huge_ptep_get_and_clear(&init_mm, addr, pte)/g' mm/vmalloc.c
+          sed -i '/map_kernel_range/d' mm/vmalloc.c
 
       - name: Configure kernel
         run: |
