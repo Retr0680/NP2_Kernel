@@ -1,9 +1,9 @@
---- a/security/selinux/avc.c	2026-04-27 22:45:58.344029112 +0200
-+++ b/security/selinux/avc.c	2026-04-27 23:15:46.899034601 +0200
+--- a/security/selinux/avc.c
++++ b/security/selinux/avc.c
 @@ -47,6 +47,12 @@
  #undef CREATE_TRACE_POINTS
  #include <trace/hooks/avc.h>
- 
+
 +#ifdef CONFIG_KSU_SUSFS
 +extern u32 susfs_ksu_sid;
 +extern u32 susfs_priv_app_sid;
@@ -13,11 +13,11 @@
  struct avc_entry {
  	u32			ssid;
  	u32			tsid;
-@@ -716,11 +722,26 @@
- 
+@@ -716,11 +722,25 @@
+
  	rc = security_sid_to_context_stack(sad->tsid, &scontext,
  				     &scontext_len);
--	if (rc)
+
 +#ifdef CONFIG_KSU_SUSFS
 +	if (static_branch_likely(&susfs_is_avc_log_spoofing_enabled)) {
 +		if (unlikely(sad->tsid == susfs_ksu_sid)) {
@@ -30,15 +30,14 @@
 +	}
 +#endif
 +
-+ 	if (rc)
-+
+ 	if (rc)
  		audit_log_format(ab, " tsid=%d", sad->tsid);
  	else
  		audit_log_format(ab, " tcontext=%s", scontext);
--
+
 +#ifdef CONFIG_KSU_SUSFS
 +bypass_orig_flow:
 +#endif
  	audit_log_format(ab, " tclass=%s", secclass_map[sad->tclass-1].name);
- 
+
  	if (sad->denied)
