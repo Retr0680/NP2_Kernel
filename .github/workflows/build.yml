@@ -158,6 +158,17 @@ jobs:
           echo "Verifying map_kernel_range removal..."
           grep -n "map_kernel_range" mm/vmalloc.c || true
 
+          echo "Fixing page_io.c NODE_DATA(nid) scope issue..."
+          # SUSFS patch adds NODE_DATA(nid) but this vendor tree's function
+          # doesn't declare 'nid'. Inject 'int nid = page_to_nid(page);'
+          # immediately before the first NODE_DATA(nid) usage if not already present.
+          if grep -q "NODE_DATA(nid)" mm/page_io.c && ! grep -q "page_to_nid" mm/page_io.c; then
+            perl -0pi -e 's/(pg_data_t \*pgdat = NODE_DATA\(nid\);)/int nid = page_to_nid(page);\n\t\t$1/g' mm/page_io.c
+          fi
+
+          echo "Verifying page_io.c fix..."
+          grep -n "nid\|NODE_DATA\|page_to_nid" mm/page_io.c || true
+
       - name: Configure kernel
         run: |
           cd kernel
