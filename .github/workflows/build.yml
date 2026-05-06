@@ -112,7 +112,16 @@ jobs:
           echo "Applying fix_api patch..."
           patch -p1 < ../patches/fix_api.diff || echo "fix_api patch failed"
 
-          echo "Checking vmalloc state..."
+          echo "Resetting vmalloc.c..."
+          git checkout -- mm/vmalloc.c
+
+          echo "Checking original vmalloc state..."
+          grep -n "huge_ptep_get_and_clear" mm/vmalloc.c || true
+
+          echo "Applying vmalloc compatibility fix..."
+          perl -0pi -e 's/huge_ptep_get_and_clear\s*\(\s*&init_mm\s*,\s*addr\s*,\s*pte\s*,\s*size\s*\)/huge_ptep_get_and_clear\(&init_mm, addr, pte\)/g' mm/vmalloc.c
+
+          echo "Verifying vmalloc fix..."
           grep -n "huge_ptep_get_and_clear" mm/vmalloc.c || true
 
           echo "Applying vmalloc fix..."
