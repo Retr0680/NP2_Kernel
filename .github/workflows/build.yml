@@ -151,6 +151,13 @@ jobs:
           echo "Verifying vmalloc fix..."
           grep -n "huge_ptep_get_and_clear" mm/vmalloc.c || true
 
+          echo "Removing stale map_kernel_range export..."
+          sed -i '/EXPORT_SYMBOL_GPL(map_kernel_range)/d' mm/vmalloc.c
+          sed -i '/EXPORT_SYMBOL(map_kernel_range)/d' mm/vmalloc.c
+
+          echo "Verifying map_kernel_range removal..."
+          grep -n "map_kernel_range" mm/vmalloc.c || true
+
       - name: Configure kernel
         run: |
           cd kernel
