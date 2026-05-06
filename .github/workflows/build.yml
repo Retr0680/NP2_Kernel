@@ -64,6 +64,10 @@ jobs:
         LLVM_AR=llvm-ar
         LLVM_NM=llvm-nm
         LLVM_OBJDUMP=llvm-objdump
+        AR=llvm-ar
+        NM=llvm-nm
+        OBJCOPY=llvm-objcopy
+        STRIP=llvm-strip
         O=out
 
     steps:
@@ -92,7 +96,20 @@ jobs:
       - name: Fix LLVM paths
         run: |
           cd kernel
-          grep -rl "/home/arter97" . | xargs -r sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/||g'
+
+          echo "Removing hardcoded arter97 LLVM paths..."
+
+          grep -rl "/home/arter97" . | while read f; do
+            sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/||g' "$f" || true
+          done
+
+          find . -type f | xargs sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/llvm-ar|llvm-ar|g'
+          find . -type f | xargs sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/llvm-nm|llvm-nm|g'
+          find . -type f | xargs sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/ld.lld|ld.lld|g'
+          find . -type f | xargs sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/clang|clang|g'
+
+          echo "Verifying cleanup..."
+          grep -R "/home/arter97" . || true
 
       - name: Setup SukiSU
         run: |
