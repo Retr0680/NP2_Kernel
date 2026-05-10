@@ -11,29 +11,49 @@ on:
         description: 'Kernel source repo'
         required: false
         type: string
-        default: 'https://github.com/arter97/android_kernel_nothing_sm8475.git'
+        default: 'https://github.com/arter97/android_kernel_nothing_sm8475'
       kernel_branch:
         description: 'Kernel branch'
         required: false
         type: string
         default: 'master'
       kernel_defconfig:
-        description: 'Defconfig'
+        description: 'Defconfig (use /name for kernel root, otherwise arch/arm64/configs/name)'
         required: false
         type: string
-        default: 'defconfig'
-      extra_configs:
-        description: 'Extra config fragments'
+        default: '/defconfig'
+      kpm_support:
+        description: 'Enable KPM support'
+        required: false
+        type: boolean
+        default: true
+      susfs_support:
+        description: 'Enable SUSFS support'
+        required: false
+        type: boolean
+        default: true
+      susfs_branch:
+        description: 'SUSFS branch'
         required: false
         type: string
-        default: ''
+        default: 'gki-android13-5.10'
+      susfs_force:
+        description: 'Force SUSFS patch apply (ignore failures)'
+        required: false
+        type: boolean
+        default: false
+      bbg_support:
+        description: 'Enable BBG support'
+        required: false
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
       kernel_repo:
         required: false
         type: string
-        default: 'https://github.com/arter97/android_kernel_nothing_sm8475.git'
+        default: 'https://github.com/arter97/android_kernel_nothing_sm8475'
       kernel_branch:
         required: false
         type: string
@@ -41,11 +61,27 @@ on:
       kernel_defconfig:
         required: false
         type: string
-        default: 'defconfig'
-      extra_configs:
+        default: '/defconfig'
+      kpm_support:
+        required: false
+        type: boolean
+        default: true
+      susfs_support:
+        required: false
+        type: boolean
+        default: true
+      susfs_branch:
         required: false
         type: string
-        default: ''
+        default: 'gki-android13-5.10'
+      susfs_force:
+        required: false
+        type: boolean
+        default: false
+      bbg_support:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -53,6 +89,10 @@ jobs:
     timeout-minutes: 120
 
     env:
+      KERNEL_DIR: kernel
+      ANYKERNEL_DIR: AnyKernel3
+      DEFCONFIG: ${{ inputs.kernel_defconfig }}
+      DEFCONFIG_FRAGS: ''
       MAKE_ARGS: >-
         ARCH=arm64
         CROSS_COMPILE=aarch64-linux-gnu-
@@ -61,9 +101,6 @@ jobs:
         LD=ld.lld HOSTLD=ld.lld
         CC=clang CXX=clang++
         HOSTCC=clang HOSTCXX=clang++
-        LLVM_AR=llvm-ar
-        LLVM_NM=llvm-nm
-        LLVM_OBJDUMP=llvm-objdump
         O=out
 
     steps:
@@ -74,112 +111,134 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential bc bison flex libelf-dev libssl-dev \
-            lz4 zip python3 clang llvm lld \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+            build-essential bc bison flex libelf-dev libssl-dev ccache \
+            lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi wget perl
+
+      # arter97's kernel has hardcoded absolute LLVM paths pointing to his local machine.
+      # Instead of patching every file, we create symlinks at exactly those paths
+      # so all existing references resolve to the system LLVM tools transparently.
+      - name: Setup LLVM toolchain symlinks for arter97 paths
+        run: |
+          llvm_dir=/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin
+          sudo mkdir -p "$llvm_dir"
+          for tool in clang clang++ llvm-ar llvm-nm llvm-objdump llvm-objcopy \
+                      llvm-readelf llvm-strip ld.lld llvm-ranlib; do
+            src=$(command -v "$tool" || true)
+            if [ -n "$src" ]; then
+              sudo ln -sf "$src" "$llvm_dir/$tool"
+              echo "Linked: $llvm_dir/$tool -> $src"
+            else
+              echo "WARNING: $tool not found in PATH"
+            fi
+          done
 
       - name: Clone sources
         run: |
           git clone --depth=1 -b "${{ inputs.kernel_branch }}" \
-            "${{ inputs.kernel_repo }}" kernel
+            "${{ inputs.kernel_repo }}" "$KERNEL_DIR"
 
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git
-          rm -rf AnyKernel3/.git
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$ANYKERNEL_DIR"
+          rm -rf "$ANYKERNEL_DIR/.git"
 
-          git clone --depth=1 -b gki-android13-5.10 \
+      - name: Clone SUSFS
+        if: ${{ inputs.susfs_support == true }}
+        run: |
+          git clone --depth=1 -b "${{ inputs.susfs_branch }}" \
             https://gitlab.com/simonpunk/susfs4ksu.git
 
-      - name: Fix LLVM paths
+      - name: Setup ReSukiSU
         run: |
-          cd kernel
-          grep -rl "/home/arter97" . | xargs -r sed -i 's|/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin/||g'
+          cd "$KERNEL_DIR"
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
 
-      - name: Setup SukiSU
+      - name: Apply extra patches (arter97-specific)
         run: |
-          cd kernel
-          curl -LSs "https://raw.githubusercontent.com/sukisu-ultra/sukisu-ultra/main/kernel/setup.sh" | bash
+          cd "$KERNEL_DIR"
+          patch_dir="$GITHUB_WORKSPACE/patches/arter97"
+          if [ -d "$patch_dir" ]; then
+            while IFS= read -r -d '' patch; do
+              echo "Applying $patch"
+              patch -p1 < "$patch" || echo "Patch failed (non-fatal): $patch"
+            done < <(find "$patch_dir" -maxdepth 1 -type f \( -name '*.patch' -o -name '*.diff' \) -print0 | sort -z)
+          else
+            echo "No extra patches dir found at $patch_dir, skipping"
+          fi
 
-      - name: Apply patches
+      - name: Apply SUSFS patches
+        if: ${{ inputs.susfs_support == true }}
         run: |
-          cd kernel
+          cd "$KERNEL_DIR"
+          cp ../susfs4ksu/kernel_patches/fs/* ./fs/
+          cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
+          susfs_patch="../susfs4ksu/kernel_patches/50_add_susfs_in_${{ inputs.susfs_branch }}.patch"
+          if [ "${{ inputs.susfs_force }}" = "true" ]; then
+            patch -p1 --force < "$susfs_patch" || echo "Continuing despite patch failure"
+          else
+            patch -p1 < "$susfs_patch" || echo "SUSFS patch had failures, check .rej files"
+          fi
 
-          echo "Applying avc patch..."
-          patch -p1 < ../patches/avc_patch.diff || echo "avc patch failed"
-
-          echo "Applying SUSFS patch..."
-          patch -p1 -N < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.10.patch || true
-
-          echo "Applying fix_api patch..."
-          patch -p1 < ../patches/fix_api.diff || echo "fix_api patch failed"
-
-          echo "Checking vmalloc state..."
-          grep -n "huge_ptep_get_and_clear" mm/vmalloc.c || true
-
-          echo "Forcing vmalloc fix (fallback)..."
-          sed -i 's/huge_ptep_get_and_clear(&init_mm, addr, pte, size)/huge_ptep_get_and_clear(&init_mm, addr, pte)/g' mm/vmalloc.c
-          sed -i '/map_kernel_range/d' mm/vmalloc.c
-
-      - name: Configure kernel
+      - name: Prepare build scripts
         run: |
-          cd kernel
+          chmod +x Scripts/build_kernel.sh
+          chmod +x Scripts/package_anykernel.sh
 
-          DEFCONFIG="${{ inputs.kernel_defconfig }}"
-          make $MAKE_ARGS $DEFCONFIG
-
-          KCFG="./scripts/config --file out/.config"
-
-          $KCFG -e KSU
-          $KCFG -e KSU_SUSFS
-          $KCFG -e KPM
-
-          make $MAKE_ARGS olddefconfig
-
-          [ -f scripts/setlocalversion ] && sed -i 's/-dirty//g' scripts/setlocalversion || true
-
-      - name: Enable swap
+      - name: Enable swap space
         run: |
           sudo swapoff /swapfile 2>/dev/null || true
           sudo rm -f /swapfile
-          sudo fallocate -l 12G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          if sudo fallocate -l 12G /swapfile; then
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile || echo "Swap not permitted on this runner"
+          else
+            echo "Swap file allocation failed; continuing without swap"
+          fi
 
-      - name: Build kernel (debug mode)
+      - name: Build kernel
         run: |
-          cd kernel
-          make -j1 $MAKE_ARGS KCFLAGS="-Wno-error" V=1
+          SUSFS_SUPPORT="${{ inputs.susfs_support }}" \
+          KPM_SUPPORT="${{ inputs.kpm_support }}" \
+          BBG_SUPPORT="${{ inputs.bbg_support }}" \
+          Scripts/build_kernel.sh
 
       - name: Package AnyKernel3
         run: |
-          if [ ! -f kernel/out/arch/arm64/boot/Image ]; then
-            echo "ERROR: kernel Image not found"
-            exit 1
-          fi
+          KERNEL_TYPE="arter97" Scripts/package_anykernel.sh
 
-          cp kernel/out/arch/arm64/boot/Image* AnyKernel3/ 2>/dev/null || true
-
-          cp Scripts/anykernel.sh AnyKernel3/anykernel.sh
-          sed -i 's/kernel.string=.*/kernel.string=NP2 Kernel - SukiSU/' AnyKernel3/anykernel.sh
-
-          cd AnyKernel3
-          zip -r9 "../SukiSU-NP2-Pong.zip" ./*
-
-      - name: Upload kernel
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-NP2-SukiSU
-          path: "*.zip"
+          name: kernel-arter97-NP2-ReSukiSU
+          path: "kernel-arter97-NP2-ReSukiSU.zip"
+          retention-days: 30
 
-      - name: Upload config
+      - name: Upload .config for debugging
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: config
+          name: config-arter97-NP2-ReSukiSU
           path: kernel/out/.config
+          retention-days: 1
 
-      - name: Upload rejects
+      - name: Collect .rej files
         if: always()
+        id: collect_rej
         run: |
           mkdir -p rej
-          find . -name '*.rej' -exec cp --parents {} rej/ \; || true
+          found="false"
+          while IFS= read -r -d '' f; do
+            found="true"
+            mkdir -p "rej/$(dirname "$f")"
+            cp "$f" "rej/$f"
+            orig="${f%.rej}"
+            [ -f "$orig" ] && cp "$orig" "rej/$orig"
+          done < <(find . -name '*.rej' -print0)
+          echo "found=$found" >> "$GITHUB_OUTPUT"
+
+      - name: Upload .rej files
+        if: always() && steps.collect_rej.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rej-arter97-NP2-ReSukiSU
+          path: rej/
