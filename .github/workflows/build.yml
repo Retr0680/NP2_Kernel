@@ -231,7 +231,14 @@ jobs:
           cd "$KERNEL_DIR"
           JOBS=$(( $(nproc) / 2 ))
           [ "$JOBS" -lt 1 ] && JOBS=1
-          make -j"$JOBS" $MAKE_ARGS Image KCFLAGS="-Wno-error"
+          make -j"$JOBS" $MAKE_ARGS Image KCFLAGS="-Wno-error" 2>&1 | tee ../build.log; exit ${PIPESTATUS[0]}
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Apply KPM patch
         if: ${{ inputs.kpm_support == true }}
