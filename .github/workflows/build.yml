@@ -42,11 +42,6 @@ on:
         required: false
         type: boolean
         default: false
-      bbg_support:
-        description: 'Enable BBG support'
-        required: false
-        type: boolean
-        default: false
 
   workflow_call:
     inputs:
@@ -78,10 +73,6 @@ on:
         required: false
         type: boolean
         default: false
-      bbg_support:
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -92,7 +83,6 @@ jobs:
       KERNEL_DIR: kernel
       ANYKERNEL_DIR: AnyKernel3
       DEFCONFIG: ${{ inputs.kernel_defconfig }}
-      DEFCONFIG_FRAGS: ''
       MAKE_ARGS: >-
         ARCH=arm64
         CROSS_COMPILE=aarch64-linux-gnu-
@@ -115,10 +105,10 @@ jobs:
             lz4 zip python3 clang llvm lld gcc-aarch64-linux-gnu \
             gcc-arm-linux-gnueabi wget perl
 
-      # arter97's kernel has hardcoded absolute LLVM paths pointing to his local machine.
-      # Instead of patching every file, we create symlinks at exactly those paths
-      # so all existing references resolve to the system LLVM tools transparently.
-      - name: Setup LLVM toolchain symlinks for arter97 paths
+      # arter97's kernel has hardcoded absolute LLVM paths to his local machine.
+      # Create symlinks at those exact paths pointing to system tools so the
+      # kernel's Makefile resolves them without any source file modifications.
+      - name: Setup LLVM symlinks for arter97 hardcoded paths
         run: |
           llvm_dir=/home/arter97/android/nathan/llvm-22.1.0-x86_64/bin
           sudo mkdir -p "$llvm_dir"
@@ -154,15 +144,15 @@ jobs:
 
       - name: Apply extra patches (arter97-specific)
         run: |
-          cd "$KERNEL_DIR"
           patch_dir="$GITHUB_WORKSPACE/patches/arter97"
           if [ -d "$patch_dir" ]; then
+            cd "$KERNEL_DIR"
             while IFS= read -r -d '' patch; do
               echo "Applying $patch"
               patch -p1 < "$patch" || echo "Patch failed (non-fatal): $patch"
             done < <(find "$patch_dir" -maxdepth 1 -type f \( -name '*.patch' -o -name '*.diff' \) -print0 | sort -z)
           else
-            echo "No extra patches dir found at $patch_dir, skipping"
+            echo "No patches/arter97 dir found, skipping"
           fi
 
       - name: Apply SUSFS patches
@@ -178,11 +168,6 @@ jobs:
             patch -p1 < "$susfs_patch" || echo "SUSFS patch had failures, check .rej files"
           fi
 
-      - name: Prepare build scripts
-        run: |
-          chmod +x Scripts/build_kernel.sh
-          chmod +x Scripts/package_anykernel.sh
-
       - name: Enable swap space
         run: |
           sudo swapoff /swapfile 2>/dev/null || true
@@ -195,16 +180,116 @@ jobs:
             echo "Swap file allocation failed; continuing without swap"
           fi
 
+      - name: Configure kernel
+        run: |
+          cd "$KERNEL_DIR"
+
+          # Resolve defconfig path (leading / means kernel root, else arch/arm64/configs/)
+          def="${{ inputs.kernel_defconfig }}"
+          if echo "$def" | grep -q '^/'; then
+            def_path="${def#/}"
+          else
+            def_path="arch/arm64/configs/$def"
+          fi
+
+          if [ ! -f "$def_path" ]; then
+            echo "Defconfig not found: $def_path" >&2
+            exit 1
+          fi
+
+          def_target="$(basename "$def_path")"
+          # Copy to arch/arm64/configs if it lives elsewhere (e.g. kernel root)
+          if [ "$def_path" != "arch/arm64/configs/$def_target" ]; then
+            cp "$def_path" "arch/arm64/configs/$def_target"
+          fi
+
+          make $MAKE_ARGS "$def_target"
+
+          # Write extra Kconfig options
+          EXTRA_CFG="out/ci-extra.config"
+          : > "$EXTRA_CFG"
+          echo "CONFIG_KSU=y" >> "$EXTRA_CFG"
+
+          if [ "${{ inputs.susfs_support }}" = "true" ]; then
+            echo "CONFIG_KSU_SUSFS=y" >> "$EXTRA_CFG"
+          fi
+
+          if [ "${{ inputs.kpm_support }}" = "true" ]; then
+            echo "CONFIG_KPM=y"         >> "$EXTRA_CFG"
+            echo "CONFIG_KALLSYMS=y"    >> "$EXTRA_CFG"
+            echo "CONFIG_KALLSYMS_ALL=y" >> "$EXTRA_CFG"
+            echo "CONFIG_KPROBES=y"     >> "$EXTRA_CFG"
+          fi
+
+          cat "$EXTRA_CFG" >> out/.config
+          make $MAKE_ARGS olddefconfig
+
+          [ -f scripts/setlocalversion ] && sed -i 's/-dirty//g' scripts/setlocalversion || true
+
       - name: Build kernel
         run: |
-          SUSFS_SUPPORT="${{ inputs.susfs_support }}" \
-          KPM_SUPPORT="${{ inputs.kpm_support }}" \
-          BBG_SUPPORT="${{ inputs.bbg_support }}" \
-          Scripts/build_kernel.sh
+          cd "$KERNEL_DIR"
+          JOBS=$(( $(nproc) / 2 ))
+          [ "$JOBS" -lt 1 ] && JOBS=1
+          make -j"$JOBS" $MAKE_ARGS Image KCFLAGS="-Wno-error"
+
+      - name: Apply KPM patch
+        if: ${{ inputs.kpm_support == true }}
+        run: |
+          cd "$KERNEL_DIR/out/arch/arm64/boot"
+          python3 - <<'PY'
+          import json, sys, urllib.request
+          url = "https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest"
+          with urllib.request.urlopen(url) as resp:
+            data = json.load(resp)
+          assets = data.get("assets", [])
+          match = next((a["browser_download_url"] for a in assets if "patch_linux" in a.get("name", "")), None)
+          if not match:
+            print("ERROR: patch_linux asset not found", file=sys.stderr)
+            sys.exit(1)
+          urllib.request.urlretrieve(match, "patch_linux")
+          PY
+          chmod +x ./patch_linux
+          ./patch_linux
+          rm -f ./Image
+          mv ./oImage ./Image
 
       - name: Package AnyKernel3
         run: |
-          KERNEL_TYPE="arter97" Scripts/package_anykernel.sh
+          if [ ! -f "$KERNEL_DIR/out/arch/arm64/boot/Image" ]; then
+            echo "ERROR: kernel Image not found"
+            exit 1
+          fi
+
+          cp "$KERNEL_DIR/out/arch/arm64/boot/Image" "$ANYKERNEL_DIR/"
+          cp "$KERNEL_DIR/out/arch/arm64/boot/Image.gz" "$ANYKERNEL_DIR/" 2>/dev/null || true
+
+          # Write anykernel.sh directly — no Scripts/ dir dependency
+          cat > "$ANYKERNEL_DIR/anykernel.sh" <<'AKSH'
+          # AnyKernel3 Ramdisk Mod Script
+          properties() { '
+          kernel.string=NP2 Kernel - ReSukiSU (arter97)
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=Pong
+          device.name2=pong
+          supported.versions=13-16
+          supported.patchlevels=
+          '; }
+          block=/dev/block/bootdevice/by-name/boot;
+          is_slot_device=1;
+          ramdisk_compression=auto;
+          patch_vbmeta_flag=auto;
+          . tools/ak3-core.sh;
+          split_boot;
+          flash_boot;
+          AKSH
+
+          cd "$ANYKERNEL_DIR"
+          zip -r9 "../kernel-arter97-NP2-ReSukiSU.zip" ./*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -221,7 +306,7 @@ jobs:
           path: kernel/out/.config
           retention-days: 1
 
-      - name: Collect .rej files
+      - name: Collect and upload .rej files
         if: always()
         id: collect_rej
         run: |
