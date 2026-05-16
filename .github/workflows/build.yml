@@ -140,7 +140,12 @@ jobs:
       - name: Setup SukiSU
         run: |
           cd "$KERNEL_DIR"
-          curl -LSs "https://raw.githubusercontent.com/SukiSU/SukiSU/main/kernel/setup.sh" | bash
+          echo "Fetching SukiSU setup script..."
+          curl -LSs "https://raw.githubusercontent.com/SukiSU/SukiSU/main/kernel/setup.sh" -o /tmp/sukisu_setup.sh
+          echo "--- setup.sh lines 395-415 (debug) ---"
+          sed -n '395,415p' /tmp/resukisu_setup.sh || true
+          echo "--- running setup.sh ---"
+          bash /tmp/resukisu_setup.sh
 
       - name: Apply extra patches (arter97-specific)
         run: |
