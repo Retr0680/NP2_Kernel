@@ -137,16 +137,38 @@ jobs:
           git clone --depth=1 -b "${{ inputs.susfs_branch }}" \
             https://gitlab.com/simonpunk/susfs4ksu.git
 
-      - name: Setup ReSukiSU
+      - name: Setup SukiSU
         run: |
           cd "$KERNEL_DIR"
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/SukiSU/SukiSU/main/kernel/setup.sh" | bash
 
       - name: Apply extra patches (arter97-specific)
         run: |
+          cd "$KERNEL_DIR"
+
+          # Fix KernelSU selinux/rules.c API mismatch with this vendor 5.10 tree.
+          # ReSukiSU setup.sh drops drivers/kernelsu/ into the tree; its rules.c
+          # references selinux_state.avc, avc_ss_reset(avc, seqno), and
+          # selinux_status_update_policyload(&state, seqno) — all newer-kernel API
+          # that doesn't exist in arter97's tree. Patch to the older signatures.
+          rules="drivers/kernelsu/selinux/rules.c"
+          if [ -f "$rules" ]; then
+            echo "Patching $rules for 5.10 SELinux API compat..."
+            # Remove the 'struct selinux_avc *avc = selinux_state.avc;' line
+            sed -i '/struct selinux_avc \*avc = selinux_state\.avc;/d' "$rules"
+            # avc_ss_reset(avc, 0) -> avc_ss_reset(0)
+            sed -i 's/avc_ss_reset(avc, 0)/avc_ss_reset(0)/g' "$rules"
+            # selinux_status_update_policyload(&selinux_state, 0) -> selinux_status_update_policyload(0)
+            sed -i 's/selinux_status_update_policyload(&selinux_state, 0)/selinux_status_update_policyload(0)/g' "$rules"
+            echo "Verifying rules.c fix..."
+            grep -n "avc_ss_reset\|selinux_status_update_policyload\|selinux_state\.avc" "$rules" || true
+          else
+            echo "WARNING: $rules not found — ReSukiSU setup may have failed"
+          fi
+
+          # Apply any additional patch files from patches/arter97/
           patch_dir="$GITHUB_WORKSPACE/patches/arter97"
           if [ -d "$patch_dir" ]; then
-            cd "$KERNEL_DIR"
             while IFS= read -r -d '' patch; do
               echo "Applying $patch"
               patch -p1 < "$patch" || echo "Patch failed (non-fatal): $patch"
@@ -231,14 +253,7 @@ jobs:
           cd "$KERNEL_DIR"
           JOBS=$(( $(nproc) / 2 ))
           [ "$JOBS" -lt 1 ] && JOBS=1
-          make -j"$JOBS" $MAKE_ARGS Image KCFLAGS="-Wno-error" 2>&1 | tee ../build.log; exit ${PIPESTATUS[0]}
-
-      - name: Upload build log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+          make -j"$JOBS" $MAKE_ARGS Image KCFLAGS="-Wno-error"
 
       - name: Apply KPM patch
         if: ${{ inputs.kpm_support == true }}
