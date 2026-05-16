@@ -137,22 +137,24 @@ jobs:
           git clone --depth=1 -b "${{ inputs.susfs_branch }}" \
             https://gitlab.com/simonpunk/susfs4ksu.git
 
-      - name: Setup SukiSU
+      - name: Setup SukiSU Ultra
         run: |
           cd "$KERNEL_DIR"
-          echo "Fetching SukiSU setup script..."
-          curl -LSs "https://raw.githubusercontent.com/SukiSU/SukiSU/main/kernel/setup.sh" -o /tmp/sukisu_setup.sh
+          echo "Fetching SukiSU Ultra setup script..."
+          curl -v -L --retry 3             "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh"             -o /tmp/sukisu_setup.sh
+          echo "Exit code: $?"
+          ls -la /tmp/sukisu_setup.sh || echo "File not found after curl"
           echo "--- setup.sh lines 395-415 (debug) ---"
-          sed -n '395,415p' /tmp/resukisu_setup.sh || true
+          sed -n '395,415p' /tmp/sukisu_setup.sh || true
           echo "--- running setup.sh ---"
-          bash /tmp/resukisu_setup.sh
+          bash /tmp/sukisu_setup.sh
 
       - name: Apply extra patches (arter97-specific)
         run: |
           cd "$KERNEL_DIR"
 
           # Fix KernelSU selinux/rules.c API mismatch with this vendor 5.10 tree.
-          # ReSukiSU setup.sh drops drivers/kernelsu/ into the tree; its rules.c
+          # SukiSU setup.sh drops drivers/kernelsu/ into the tree; its rules.c
           # references selinux_state.avc, avc_ss_reset(avc, seqno), and
           # selinux_status_update_policyload(&state, seqno) — all newer-kernel API
           # that doesn't exist in arter97's tree. Patch to the older signatures.
@@ -168,7 +170,7 @@ jobs:
             echo "Verifying rules.c fix..."
             grep -n "avc_ss_reset\|selinux_status_update_policyload\|selinux_state\.avc" "$rules" || true
           else
-            echo "WARNING: $rules not found — ReSukiSU setup may have failed"
+            echo "WARNING: $rules not found — SukiSU setup may have failed"
           fi
 
           # Apply any additional patch files from patches/arter97/
@@ -295,7 +297,7 @@ jobs:
           cat > "$ANYKERNEL_DIR/anykernel.sh" <<'AKSH'
           # AnyKernel3 Ramdisk Mod Script
           properties() { '
-          kernel.string=NP2 Kernel - ReSukiSU (arter97)
+          kernel.string=NP2 Kernel - SukiSU (arter97)
           do.devicecheck=1
           do.modules=0
           do.systemless=1
@@ -316,20 +318,20 @@ jobs:
           AKSH
 
           cd "$ANYKERNEL_DIR"
-          zip -r9 "../kernel-arter97-NP2-ReSukiSU.zip" ./*
+          zip -r9 "../kernel-arter97-NP2-SukiSU.zip" ./*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-arter97-NP2-ReSukiSU
-          path: "kernel-arter97-NP2-ReSukiSU.zip"
+          name: kernel-arter97-NP2-SukiSU
+          path: "kernel-arter97-NP2-SukiSU.zip"
           retention-days: 30
 
       - name: Upload .config for debugging
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: config-arter97-NP2-ReSukiSU
+          name: config-arter97-NP2-SukiSU
           path: kernel/out/.config
           retention-days: 1
 
@@ -352,5 +354,5 @@ jobs:
         if: always() && steps.collect_rej.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: rej-arter97-NP2-ReSukiSU
+          name: rej-arter97-NP2-SukiSU
           path: rej/
