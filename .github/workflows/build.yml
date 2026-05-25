@@ -169,10 +169,10 @@ jobs:
           git clone --depth=1 -b "${{ inputs.susfs_branch || 'gki-android13-5.10' }}" \
             https://gitlab.com/simonpunk/susfs4ksu.git
 
-      - name: Setup ReSukiSU
+      - name: Setup SukiSU
         run: |
           cd "$KERNEL_DIR"
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/SukiSU/SukiSU/main/kernel/setup.sh" | bash
 
       - name: Apply extra patches
         if: ${{ inputs.extra_patches_dir != '' }}
@@ -247,7 +247,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: config-NP2-ReSukiSU
+          name: config-NP2-SukiSU
           path: kernel/out/.config
           retention-days: 1
 
@@ -270,5 +270,5 @@ jobs:
         if: always() && steps.collect_rej.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: rej-NP2-ReSukiSU
+          name: rej-NP2-SukiSU
           path: rej/
